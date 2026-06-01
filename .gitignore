@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# 虚拟环境
+venv/
+env/
+.venv/
+ENV/
+
+# 运行环境
+startup.log
+startup_failed.flag
+diagnose.log
+diagnose_test.png
+test_output.png
+test_output/
+*.tmp
+
+# 用户历史记录（每个用户重新生成）
+history/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 打包
+build/
+dist/
+*.spec
