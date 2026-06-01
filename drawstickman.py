@@ -70,6 +70,50 @@ ICON_FILE = APP_DIR / 'stickman.ico'
 LOG_FILE = APP_DIR / 'startup.log'
 
 
+# 默认 Prompt（与 drawstickman.prompt 同步，作为 fallback）
+DEFAULT_PROMPT = """你是一个火柴人动画数据生成助手。请严格按照以下规格，将用户描述的动作转换为 JSON 格式的火柴人姿势数据。
+
+## 画布与坐标系
+- 画布尺寸：宽 800，高 1000，左上角为原点 (0,0)，x 向右增加，y 向下增加。
+- 所有坐标均为整数。
+
+## 火柴人关键点定义
+每一帧必须包含以下关键点（均为 [x, y] 数组）：
+- head_center: 头部圆心坐标（半径固定为25，由绘图程序自动绘制）
+- head_angle: 头部朝向角度（0=向右，90=向下，180=向左，270=向上）
+- neck: 脖子点（连接头部与身体）
+- hip: 髋部中心点
+- left_shoulder, left_elbow, left_wrist: 左臂三关节点（肩、肘、腕）
+- right_shoulder, right_elbow, right_wrist: 右臂三关节点
+- left_hip, left_knee, left_ankle: 左腿三关节点（髋、膝、踝）
+- right_hip, right_knee, right_ankle: 右腿三关节点
+- left_hand_item: 左手持有物品，null 或物品名称（可选值：null, "dumbbell", "barbell"）
+- right_hand_item: 右手持有物品，同上
+
+## 身体连接规则（由绘图程序固定完成，你只需提供坐标）
+- 头：以 head_center 为圆心画圆，根据 head_angle 绘制扇形指示面部朝向。
+- 身体：neck 连 hip。
+- 肩膀连接：neck 分别连 left_shoulder 和 right_shoulder。
+- 手臂：肩→肘→腕，折线连接（可表现弯曲）。
+- 腿：髋→膝→踝，折线连接（可表现弯曲）。
+- 手持物品：若 hand_item 不为 null，在腕关节坐标处绘制对应物品图形。
+
+## 输出要求
+- 若用户需要单张静态图，输出一个帧对象 {}。
+- 若用户需要多帧动画，输出帧数组 [{}, {}, ...]。
+- 帧数建议 4-12 帧，帧间动作连贯，符合物理规律。
+- **保持身体比例自然**：头部约占全身高度 1/7，上臂+前臂长度约等于躯干长度，大腿+小腿长度约等于躯干长度。
+- **关节弯曲角度符合人体限度**：肘部弯曲角度不小于 30 度，膝盖弯曲角度不小于 45 度，不允许出现反关节（如膝盖向后弯）。
+- **重心稳定**：站立时髋部应位于双脚支撑面中心的上方；运动过程中重心过渡平滑，避免瞬间跳动。
+- **细节生动**：手腕和脚踝应随动作有微小的自然角度变化，避免所有关节完全僵直排列。
+- 只输出纯 JSON，不要任何解释、不要 markdown 标记，不要前后缀文字。
+- JSON 必须有效，可直接解析。
+
+## 动作描述（用户提供）
+{在这里输入你对火柴人动作的自然语言描述}
+"""
+
+
 def log_exception(exc):
     """将异常写入日志文件（pythonw.exe 静默崩溃时用于排查）"""
     try:
@@ -511,7 +555,8 @@ class PromptWindow:
         if PROMPT_FILE.exists():
             content = PROMPT_FILE.read_text(encoding='utf-8')
         else:
-            content = "（默认 prompt 缺失，请创建 drawstickman.prompt 文件）"
+            # 文件丢失时使用内置默认（与 drawstickman.prompt 同步）
+            content = DEFAULT_PROMPT
         self.prompt_text.insert('1.0', content)
 
     def _copy_all(self):
