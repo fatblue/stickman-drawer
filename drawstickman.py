@@ -38,7 +38,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.patches import Circle, Wedge
+from matplotlib.patches import Circle, Wedge, Ellipse
 import numpy as np
 
 import tkinter as tk
@@ -112,70 +112,103 @@ def draw_barbell(ax, center, size=30):
     ax.add_patch(c2)
 
 
-def draw_head(ax, center, angle=0):
+def draw_joint(ax, center, size=5, color='#2c3e50', alpha=0.8):
+    """画关节点小圆"""
     x, y = center
-    head = Circle((x, y), HEAD_RADIUS, edgecolor=COLOR, facecolor='white', lw=LINE_WIDTH)
+    ax.add_patch(Circle((x, y), size, facecolor=color, edgecolor='none', alpha=alpha))
+
+
+def draw_head(ax, center, angle=0):
+    """升级头部：圆 + 眼睛 + 鼻子"""
+    x, y = center
+    # 头部圆
+    head = Circle((x, y), HEAD_RADIUS, edgecolor='#2c3e50', facecolor='white', lw=3)
     ax.add_patch(head)
-    wedge = Wedge((x, y), HEAD_RADIUS * 0.7, angle - 20, angle + 20,
-                  facecolor=COLOR, alpha=0.6)
-    ax.add_patch(wedge)
-
-
-def draw_limb(ax, joints, color=COLOR, lw=LINE_WIDTH):
-    xs, ys = zip(*joints)
-    ax.plot(xs, ys, color=color, lw=lw, solid_capstyle='round')
+    # 眼睛：两个小圆，根据角度偏移
+    dx = 8 * np.cos(np.radians(angle))
+    dy = -8 * np.sin(np.radians(angle))  # 坐标系y向下，角度0向右
+    eye_offset = np.array([dx, dy])
+    perp = np.array([-dy, dx]) * 0.4  # 垂直方向偏移
+    eye_left = np.array([x, y]) + eye_offset + perp
+    eye_right = np.array([x, y]) + eye_offset - perp
+    ax.add_patch(Circle(eye_left, 3, color='#2c3e50'))
+    ax.add_patch(Circle(eye_right, 3, color='#2c3e50'))
+    # 鼻子（短线）
+    nose_tip = np.array([x, y]) + eye_offset * 1.5
+    ax.plot([x + dx*1.2, nose_tip[0]], [y + dy*1.2, nose_tip[1]], color='#2c3e50', lw=2)
 
 
 def draw_stickman(ax, frame):
-    head_center = frame.get('head_center', [400, 300])
-    head_angle = frame.get('head_angle', 0)
-    draw_head(ax, head_center, head_angle)
-
+    # 身体主干
     neck = frame.get('neck')
     hip = frame.get('hip')
     if neck and hip:
-        ax.plot([neck[0], hip[0]], [neck[1], hip[1]], color=COLOR, lw=LINE_WIDTH)
+        ax.plot([neck[0], hip[0]], [neck[1], hip[1]], color='#34495e', lw=6, solid_capstyle='round')
 
+    # 四肢通用函数
+    def draw_limb(joints, is_leg=False):
+        xs, ys = zip(*joints)
+        ax.plot(xs, ys, color='#34495e', lw=5, solid_capstyle='round')
+        for j in joints[1:-1]:  # 中间关节
+            draw_joint(ax, j)
+        if is_leg:
+            # 脚：在末端画小椭圆
+            end_x, end_y = joints[-1]
+            ax.add_patch(Ellipse((end_x, end_y + 2), 12, 6, angle=0, facecolor='#34495e'))
+        else:
+            # 手：小圆点
+            draw_joint(ax, joints[-1], size=6)
+
+    # 左臂
     left_shoulder = frame.get('left_shoulder')
     left_elbow = frame.get('left_elbow')
     left_wrist = frame.get('left_wrist')
     if left_shoulder and left_elbow and left_wrist:
-        draw_limb(ax, [left_shoulder, left_elbow, left_wrist])
+        draw_limb([left_shoulder, left_elbow, left_wrist], is_leg=False)
         item = frame.get('left_hand_item')
         if item == 'dumbbell':
             draw_dumbbell(ax, left_wrist)
         elif item == 'barbell':
             draw_barbell(ax, left_wrist)
 
+    # 右臂
     right_shoulder = frame.get('right_shoulder')
     right_elbow = frame.get('right_elbow')
     right_wrist = frame.get('right_wrist')
     if right_shoulder and right_elbow and right_wrist:
-        draw_limb(ax, [right_shoulder, right_elbow, right_wrist])
+        draw_limb([right_shoulder, right_elbow, right_wrist], is_leg=False)
         item = frame.get('right_hand_item')
         if item == 'dumbbell':
             draw_dumbbell(ax, right_wrist)
         elif item == 'barbell':
             draw_barbell(ax, right_wrist)
 
+    # 左腿
     left_hip = frame.get('left_hip')
     left_knee = frame.get('left_knee')
     left_ankle = frame.get('left_ankle')
     if left_hip and left_knee and left_ankle:
-        draw_limb(ax, [left_hip, left_knee, left_ankle])
+        draw_limb([left_hip, left_knee, left_ankle], is_leg=True)
 
+    # 右腿
     right_hip = frame.get('right_hip')
     right_knee = frame.get('right_knee')
     right_ankle = frame.get('right_ankle')
     if right_hip and right_knee and right_ankle:
-        draw_limb(ax, [right_hip, right_knee, right_ankle])
+        draw_limb([right_hip, right_knee, right_ankle], is_leg=True)
 
+    # 肩部连接
     if neck and left_shoulder:
         ax.plot([neck[0], left_shoulder[0]], [neck[1], left_shoulder[1]],
-                color=COLOR, lw=LINE_WIDTH / 2)
+                color='#34495e', lw=3, solid_capstyle='round')
     if neck and right_shoulder:
         ax.plot([neck[0], right_shoulder[0]], [neck[1], right_shoulder[1]],
-                color=COLOR, lw=LINE_WIDTH / 2)
+                color='#34495e', lw=3, solid_capstyle='round')
+
+    # 头部
+    head_center = frame.get('head_center', [400, 300])
+    head_angle = frame.get('head_angle', 0)
+    draw_head(ax, head_center, head_angle)
 
 
 def create_canvas():
