@@ -38,7 +38,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from matplotlib.patches import Circle, Wedge, Ellipse
+from matplotlib.patches import Circle, Wedge, Ellipse, Rectangle
 import numpy as np
 
 import tkinter as tk
@@ -90,26 +90,86 @@ CODE_FONT_SMALL = ('Consolas', 9)
 
 
 # ============== 渲染函数 ==============
-def draw_dumbbell(ax, center, size=20):
+def draw_dumbbell(ax, center, size=22):
+    """美化哑铃：金属横杠 + 两端球体（渐变高光）"""
     x, y = center
-    r = size / 5
-    bar_len = size * 0.8
-    ax.plot([x - bar_len / 2, x + bar_len / 2], [y, y], color=ITEM_COLOR, lw=3)
-    c1 = Circle((x - bar_len / 2, y), r, color=ITEM_COLOR, fill=True)
-    c2 = Circle((x + bar_len / 2, y), r, color=ITEM_COLOR, fill=True)
-    ax.add_patch(c1)
-    ax.add_patch(c2)
+    r = size / 4
+    bar_len = size * 1.1
+
+    # 金属横杠
+    ax.add_patch(Rectangle((x - bar_len / 2, y - r * 0.25), bar_len, r * 0.5,
+                           facecolor='#888', edgecolor='#333', lw=1, zorder=2))
+    # 横杠高光
+    ax.add_patch(Rectangle((x - bar_len / 2, y - r * 0.15), bar_len, r * 0.12,
+                           facecolor='#bbb', edgecolor='none', zorder=3))
+
+    # 两端球体
+    for sign in (-1, 1):
+        bx, by = x + sign * bar_len / 2, y
+        # 球体主体
+        ax.add_patch(Circle((bx, by), r, facecolor='#1a1a1a',
+                            edgecolor='black', lw=1.2, zorder=4))
+        # 球体反光（渐变层）
+        ax.add_patch(Circle((bx - r * 0.25, by - r * 0.25), r * 0.6,
+                            facecolor='#555', edgecolor='none', alpha=0.85, zorder=5))
+        # 高光点
+        ax.add_patch(Circle((bx - r * 0.4, by - r * 0.4), r * 0.25,
+                            facecolor='white', edgecolor='none', alpha=0.6, zorder=6))
 
 
 def draw_barbell(ax, center, size=30):
+    """美化杠铃：金属横杠 + 两端杠铃片（多层 + 纹路）"""
     x, y = center
-    bar_len = size * 1.5
-    ax.plot([x - bar_len / 2, x + bar_len / 2], [y, y], color=ITEM_COLOR, lw=3)
+    bar_len = size * 1.8
     weight_r = size / 3
-    c1 = Circle((x - bar_len / 2, y), weight_r, color=ITEM_COLOR, fill=False, lw=2)
-    c2 = Circle((x + bar_len / 2, y), weight_r, color=ITEM_COLOR, fill=False, lw=2)
-    ax.add_patch(c1)
-    ax.add_patch(c2)
+
+    # 金属横杠
+    ax.add_patch(Rectangle((x - bar_len / 2, y - weight_r * 0.2), bar_len, weight_r * 0.4,
+                           facecolor='#999', edgecolor='#444', lw=1, zorder=2))
+    # 横杠高光
+    ax.add_patch(Rectangle((x - bar_len / 2, y - weight_r * 0.1), bar_len, weight_r * 0.1,
+                           facecolor='#ccc', edgecolor='none', zorder=3))
+
+    # 两端杠铃片
+    for sign in (-1, 1):
+        bx, by = x + sign * bar_len / 2, y
+        # 杠铃片外圈
+        ax.add_patch(Circle((bx, by), weight_r, facecolor='#1a1a1a',
+                            edgecolor='black', lw=1.5, zorder=4))
+        # 杠铃片中圈（亮一些模拟金属光泽）
+        ax.add_patch(Circle((bx, by), weight_r * 0.75, facecolor='#666',
+                            edgecolor='#333', lw=0.8, zorder=5))
+        # 中心轴孔
+        ax.add_patch(Circle((bx, by), weight_r * 0.15, facecolor='#1a1a1a',
+                            edgecolor='black', lw=0.5, zorder=6))
+        # 纹路：4 条短刻度线
+        for ang_deg in (0, 90, 180, 270):
+            rad = np.radians(ang_deg)
+            r1 = weight_r * 0.4
+            r2 = weight_r * 0.88
+            x1 = bx + r1 * np.cos(rad)
+            y1 = by + r1 * np.sin(rad)
+            x2 = bx + r2 * np.cos(rad)
+            y2 = by + r2 * np.sin(rad)
+            ax.plot([x1, x2], [y1, y2], color='black', lw=0.7, zorder=7)
+
+
+def draw_shadow(ax, frame):
+    """地面阴影：在双脚下方画半透明椭圆"""
+    left_ankle = frame.get('left_ankle')
+    right_ankle = frame.get('right_ankle')
+    if not (left_ankle and right_ankle):
+        return
+    # 阴影中心：两脚中点
+    cx = (left_ankle[0] + right_ankle[0]) / 2
+    cy = max(left_ankle[1], right_ankle[1]) + 12
+    # 阴影大小
+    foot_span = abs(left_ankle[0] - right_ankle[0])
+    w = max(120, foot_span + 60)
+    h = w * 0.18
+    shadow = Ellipse((cx, cy), w, h, facecolor='black',
+                     edgecolor='none', alpha=0.12, zorder=0)
+    ax.add_patch(shadow)
 
 
 def draw_joint(ax, center, size=5, color='#2c3e50', alpha=0.8):
@@ -139,25 +199,39 @@ def draw_head(ax, center, angle=0):
 
 
 def draw_stickman(ax, frame):
-    # 身体主干
+    # 阴影（最底层）
+    draw_shadow(ax, frame)
+
+    # 身体主干（最深色）
     neck = frame.get('neck')
     hip = frame.get('hip')
     if neck and hip:
-        ax.plot([neck[0], hip[0]], [neck[1], hip[1]], color='#34495e', lw=6, solid_capstyle='round')
+        ax.plot([neck[0], hip[0]], [neck[1], hip[1]],
+                color='#1a252f', lw=6, solid_capstyle='round', zorder=2)
 
-    # 四肢通用函数
+    # 四肢通用函数（稍浅色）
     def draw_limb(joints, is_leg=False):
         xs, ys = zip(*joints)
-        ax.plot(xs, ys, color='#34495e', lw=5, solid_capstyle='round')
+        ax.plot(xs, ys, color='#34495e', lw=5, solid_capstyle='round', zorder=2)
         for j in joints[1:-1]:  # 中间关节
-            draw_joint(ax, j)
+            draw_joint(ax, j, color='#1a252f')
         if is_leg:
-            # 脚：在末端画小椭圆
+            # 脚：在末端画小椭圆 + 方向短线（脚趾朝向）
             end_x, end_y = joints[-1]
-            ax.add_patch(Ellipse((end_x, end_y + 2), 12, 6, angle=0, facecolor='#34495e'))
+            ax.add_patch(Ellipse((end_x, end_y + 2), 12, 6, angle=0,
+                                 facecolor='#1a252f', edgecolor='none', zorder=3))
+            # 脚趾方向
+            knee = joints[-2]
+            toe_dx = end_x - knee[0]
+            toe_dy = end_y - knee[1]
+            toe_len = 8
+            tx2 = end_x + toe_dx * 0.3
+            ty2 = end_y + toe_dy * 0.3
+            ax.plot([end_x, tx2], [end_y, ty2], color='#1a252f', lw=4,
+                    solid_capstyle='round', zorder=3)
         else:
-            # 手：小圆点
-            draw_joint(ax, joints[-1], size=6)
+            # 手：小圆点（带方向感，size 稍大）
+            draw_joint(ax, joints[-1], size=6, color='#1a252f')
 
     # 左臂
     left_shoulder = frame.get('left_shoulder')
@@ -200,10 +274,10 @@ def draw_stickman(ax, frame):
     # 肩部连接
     if neck and left_shoulder:
         ax.plot([neck[0], left_shoulder[0]], [neck[1], left_shoulder[1]],
-                color='#34495e', lw=3, solid_capstyle='round')
+                color='#34495e', lw=3, solid_capstyle='round', zorder=2)
     if neck and right_shoulder:
         ax.plot([neck[0], right_shoulder[0]], [neck[1], right_shoulder[1]],
-                color='#34495e', lw=3, solid_capstyle='round')
+                color='#34495e', lw=3, solid_capstyle='round', zorder=2)
 
     # 头部
     head_center = frame.get('head_center', [400, 300])
