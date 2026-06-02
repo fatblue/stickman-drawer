@@ -62,6 +62,12 @@ LINE_WIDTH = 4
 COLOR = 'black'
 ITEM_COLOR = 'gray'
 
+# 健身教学风格：粗线条 + 大关节 + 圆滑曲线
+STROKE_WIDTH = 6          # 主线条粗细
+JOINT_RADIUS = 6          # 关节点大小
+LIMB_COLOR = '#2c3e50'    # 四肢线条颜色
+BODY_COLOR = '#2c3e50'    # 身体主干颜色
+
 APP_DIR = Path(__file__).resolve().parent
 HISTORY_DIR = APP_DIR / 'history'
 HISTORY_DIR.mkdir(exist_ok=True)
@@ -71,46 +77,33 @@ LOG_FILE = APP_DIR / 'startup.log'
 
 
 # 默认 Prompt（与 drawstickman.prompt 同步，作为 fallback）
-DEFAULT_PROMPT = """你是一个火柴人动画数据生成助手。请严格按照以下规格，将用户描述的动作转换为 JSON 格式的火柴人姿势数据。
+DEFAULT_PROMPT = """你是一个火柴人动画数据生成助手，专门为室内健身教学提供动作图解。请将用户描述的健身动作转换为 JSON 格式的火柴人姿势数据，风格要求极度清晰、准确，适合教学展示。
 
 ## 画布与坐标系
 - 画布尺寸：宽 800，高 1000，左上角为原点 (0,0)，x 向右增加，y 向下增加。
 - 所有坐标均为整数。
 
-## 火柴人关键点定义
+## 火柴人关键点定义（与现有程序兼容）
 每一帧必须包含以下关键点（均为 [x, y] 数组）：
-- head_center: 头部圆心坐标（半径固定为25，由绘图程序自动绘制）
-- head_angle: 头部朝向角度（0=向右，90=向下，180=向左，270=向上）
-- neck: 脖子点（连接头部与身体）
-- hip: 髋部中心点
-- left_shoulder, left_elbow, left_wrist: 左臂三关节点（肩、肘、腕）
-- right_shoulder, right_elbow, right_wrist: 右臂三关节点
-- left_hip, left_knee, left_ankle: 左腿三关节点（髋、膝、踝）
-- right_hip, right_knee, right_ankle: 右腿三关节点
-- left_hand_item: 左手持有物品，null 或物品名称（可选值：null, "dumbbell", "barbell"）
-- right_hand_item: 右手持有物品，同上
+- head_center, head_angle, neck, hip
+- left_shoulder, left_elbow, left_wrist
+- right_shoulder, right_elbow, right_wrist
+- left_hip, left_knee, left_ankle
+- right_hip, right_knee, right_ankle
+- left_hand_item, right_hand_item （null, "dumbbell", "barbell"）
 
-## 身体连接规则（由绘图程序固定完成，你只需提供坐标）
-- 头：以 head_center 为圆心画圆，根据 head_angle 绘制扇形指示面部朝向。
-- 身体：neck 连 hip。
-- 肩膀连接：neck 分别连 left_shoulder 和 right_shoulder。
-- 手臂：肩→肘→腕，折线连接（可表现弯曲）。
-- 腿：髋→膝→踝，折线连接（可表现弯曲）。
-- 手持物品：若 hand_item 不为 null，在腕关节坐标处绘制对应物品图形。
-
-## 输出要求
-- 若用户需要单张静态图，输出一个帧对象 {}。
-- 若用户需要多帧动画，输出帧数组 [{}, {}, ...]。
-- 帧数建议 4-12 帧，帧间动作连贯，符合物理规律。
-- **保持身体比例自然**：头部约占全身高度 1/7，上臂+前臂长度约等于躯干长度，大腿+小腿长度约等于躯干长度。
-- **关节弯曲角度符合人体限度**：肘部弯曲角度不小于 30 度，膝盖弯曲角度不小于 45 度，不允许出现反关节（如膝盖向后弯）。
-- **重心稳定**：站立时髋部应位于双脚支撑面中心的上方；运动过程中重心过渡平滑，避免瞬间跳动。
-- **细节生动**：手腕和脚踝应随动作有微小的自然角度变化，避免所有关节完全僵直排列。
-- 只输出纯 JSON，不要任何解释、不要 markdown 标记，不要前后缀文字。
+## 教学动画核心要求（严格遵循）
+- **真实人体比例**：头部约占身高的 1/7，上臂+前臂长度 ≈ 躯干长度，大腿+小腿长度 ≈ 躯干长度。绝对避免肢体过长或过短。
+- **关节活动度真实**：肘关节弯曲角度 ≥ 30°，膝关节弯曲角度 ≥ 45°（深蹲时大腿可贴小腿，但膝盖绝不反弓）。所有关节角度均在人正常范围。
+- **动作平稳流畅**：帧间位移平滑，重心转移自然，无突然弹跳。起止有缓入缓出（ease-in/out），节奏均匀。
+- **姿势清晰可辨**：健身动作的关键特征必须突出（如深蹲时大腿低于水平、硬拉时腰背笔直、弓步时双膝约 90°）。避免遮挡，四肢打开角度一目了然。
+- **外观适合教学**：身体保持直立感，动态中尽量展示侧面或半侧面，让动作平面与观察平面一致，方便学员模仿。
+- 若为多帧动画，输出 12-20 帧，循环动作首尾衔接。
+- 只输出纯 JSON 数组，不要任何解释、markdown 标记或前后缀。
 - JSON 必须有效，可直接解析。
 
 ## 动作描述（用户提供）
-{在这里输入你对火柴人动作的自然语言描述}
+{在此输入具体健身动作，如：哑铃弯举、弓步蹲、平板支撑、开合跳等}
 """
 
 
@@ -216,17 +209,34 @@ def draw_shadow(ax, frame):
     ax.add_patch(shadow)
 
 
-def draw_joint(ax, center, size=5, color='#2c3e50', alpha=0.8):
+def draw_joint(ax, center, size=JOINT_RADIUS, color='#1a252f', alpha=0.9):
     """画关节点小圆"""
     x, y = center
     ax.add_patch(Circle((x, y), size, facecolor=color, edgecolor='none', alpha=alpha))
 
 
+def draw_curved_limb(ax, p0, p1, p2, color=LIMB_COLOR, lw=STROKE_WIDTH, samples=24):
+    """
+    用二次贝塞尔曲线画肢体，经过 p0（起）, p1（中）, p2（终）。
+    控制点取在 p1 处，曲线会平滑地经过中间点。
+    内部采样为多个点后用 Line2D 绘制（支持 round cap/join）。
+    """
+    p0 = np.asarray(p0, dtype=float)
+    p1 = np.asarray(p1, dtype=float)
+    p2 = np.asarray(p2, dtype=float)
+    t = np.linspace(0.0, 1.0, samples)
+    # 二次贝塞尔公式: B(t) = (1-t)^2 P0 + 2(1-t)t P1 + t^2 P2
+    pts = ((1 - t) ** 2)[:, None] * p0 + (2 * (1 - t) * t)[:, None] * p1 + (t ** 2)[:, None] * p2
+    ax.plot(pts[:, 0], pts[:, 1], color=color, lw=lw,
+            solid_capstyle='round', solid_joinstyle='round', zorder=2)
+
+
 def draw_head(ax, center, angle=0):
     """升级头部：圆 + 眼睛 + 鼻子"""
     x, y = center
-    # 头部圆
-    head = Circle((x, y), HEAD_RADIUS, edgecolor='#2c3e50', facecolor='white', lw=3)
+    # 头部圆（线宽跟随全局）
+    head = Circle((x, y), HEAD_RADIUS, edgecolor=BODY_COLOR, facecolor='white',
+                  lw=STROKE_WIDTH)
     ax.add_patch(head)
     # 眼睛：两个小圆，根据角度偏移
     dx = 8 * np.cos(np.radians(angle))
@@ -235,47 +245,49 @@ def draw_head(ax, center, angle=0):
     perp = np.array([-dy, dx]) * 0.4  # 垂直方向偏移
     eye_left = np.array([x, y]) + eye_offset + perp
     eye_right = np.array([x, y]) + eye_offset - perp
-    ax.add_patch(Circle(eye_left, 3, color='#2c3e50'))
-    ax.add_patch(Circle(eye_right, 3, color='#2c3e50'))
+    ax.add_patch(Circle(eye_left, 3, color=BODY_COLOR))
+    ax.add_patch(Circle(eye_right, 3, color=BODY_COLOR))
     # 鼻子（短线）
     nose_tip = np.array([x, y]) + eye_offset * 1.5
-    ax.plot([x + dx*1.2, nose_tip[0]], [y + dy*1.2, nose_tip[1]], color='#2c3e50', lw=2)
+    ax.plot([x + dx*1.2, nose_tip[0]], [y + dy*1.2, nose_tip[1]],
+            color=BODY_COLOR, lw=2)
 
 
 def draw_stickman(ax, frame):
     # 阴影（最底层）
     draw_shadow(ax, frame)
 
-    # 身体主干（最深色）
+    # 身体主干（加粗 + 直角连接器效果）
     neck = frame.get('neck')
     hip = frame.get('hip')
     if neck and hip:
         ax.plot([neck[0], hip[0]], [neck[1], hip[1]],
-                color='#1a252f', lw=6, solid_capstyle='round', zorder=2)
+                color=BODY_COLOR, lw=STROKE_WIDTH + 2, solid_capstyle='round',
+                solid_joinstyle='round', zorder=2)
 
-    # 四肢通用函数（稍浅色）
+    # 四肢通用函数（贝塞尔曲线 + 关节圆点 + 末端装饰）
     def draw_limb(joints, is_leg=False):
-        xs, ys = zip(*joints)
-        ax.plot(xs, ys, color='#34495e', lw=5, solid_capstyle='round', zorder=2)
-        for j in joints[1:-1]:  # 中间关节
-            draw_joint(ax, j, color='#1a252f')
+        # 用二次贝塞尔曲线画肢体
+        draw_curved_limb(ax, joints[0], joints[1], joints[2])
+        # 中间关节（肘/膝）画实心圆点
+        for j in joints[1:-1]:
+            draw_joint(ax, j, color=BODY_COLOR)
         if is_leg:
             # 脚：在末端画小椭圆 + 方向短线（脚趾朝向）
             end_x, end_y = joints[-1]
             ax.add_patch(Ellipse((end_x, end_y + 2), 12, 6, angle=0,
-                                 facecolor='#1a252f', edgecolor='none', zorder=3))
+                                 facecolor=BODY_COLOR, edgecolor='none', zorder=3))
             # 脚趾方向
             knee = joints[-2]
             toe_dx = end_x - knee[0]
             toe_dy = end_y - knee[1]
-            toe_len = 8
             tx2 = end_x + toe_dx * 0.3
             ty2 = end_y + toe_dy * 0.3
-            ax.plot([end_x, tx2], [end_y, ty2], color='#1a252f', lw=4,
+            ax.plot([end_x, tx2], [end_y, ty2], color=BODY_COLOR, lw=STROKE_WIDTH - 1,
                     solid_capstyle='round', zorder=3)
         else:
             # 手：小圆点（带方向感，size 稍大）
-            draw_joint(ax, joints[-1], size=6, color='#1a252f')
+            draw_joint(ax, joints[-1], size=JOINT_RADIUS + 1, color=BODY_COLOR)
 
     # 左臂
     left_shoulder = frame.get('left_shoulder')
@@ -315,13 +327,13 @@ def draw_stickman(ax, frame):
     if right_hip and right_knee and right_ankle:
         draw_limb([right_hip, right_knee, right_ankle], is_leg=True)
 
-    # 肩部连接
+    # 肩部连接（加粗）
     if neck and left_shoulder:
         ax.plot([neck[0], left_shoulder[0]], [neck[1], left_shoulder[1]],
-                color='#34495e', lw=3, solid_capstyle='round', zorder=2)
+                color=LIMB_COLOR, lw=STROKE_WIDTH, solid_capstyle='round', zorder=2)
     if neck and right_shoulder:
         ax.plot([neck[0], right_shoulder[0]], [neck[1], right_shoulder[1]],
-                color='#34495e', lw=3, solid_capstyle='round', zorder=2)
+                color=LIMB_COLOR, lw=STROKE_WIDTH, solid_capstyle='round', zorder=2)
 
     # 头部
     head_center = frame.get('head_center', [400, 300])
